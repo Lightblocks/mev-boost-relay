@@ -28,7 +28,6 @@ import (
 	"github.com/flashbots/mev-boost-relay/common"
 	"github.com/flashbots/mev-boost-relay/database"
 	"github.com/flashbots/mev-boost-relay/datastore"
-	"github.com/go-redis/redis/v9"
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 	uberatomic "go.uber.org/atomic"
@@ -217,6 +216,8 @@ func NewRelayAPI(opts RelayAPIOpts) (api *RelayAPI, err error) {
 	return api, nil
 }
 
+// This getRouter function returns an HTTP handler
+// It creates a new router using the mux library and sets up several routes for different API endpoints
 func (api *RelayAPI) getRouter() http.Handler {
 	r := mux.NewRouter()
 
@@ -266,6 +267,7 @@ func (api *RelayAPI) getRouter() http.Handler {
 
 // StartServer starts the HTTP server for this instance
 func (api *RelayAPI) StartServer() (err error) {
+	// Checks if the server has already started
 	if api.srvStarted.Swap(true) {
 		return ErrServerAlreadyStarted
 	}
@@ -319,14 +321,19 @@ func (api *RelayAPI) StartServer() (err error) {
 		}
 	}()
 
+	// Creates a new HTTP server
 	api.srv = &http.Server{
 		Addr:    api.opts.ListenAddr,
 		Handler: api.getRouter(),
 
-		ReadTimeout:       1500 * time.Millisecond,
+		// the maximum duration for reading the entire request, including the body
+		ReadTimeout: 1500 * time.Millisecond,
+		// the amount of time allowed to read request headers
 		ReadHeaderTimeout: 600 * time.Millisecond,
-		WriteTimeout:      3 * time.Second,
-		IdleTimeout:       3 * time.Second,
+		// the maximum duration before timing out writes of the response
+		WriteTimeout: 3 * time.Second,
+		// the amount of time that a client session can be idle before the server cancels the session
+		IdleTimeout: 3 * time.Second,
 	}
 
 	err = api.srv.ListenAndServe()
@@ -381,6 +388,7 @@ func (api *RelayAPI) startValidatorRegistrationDBProcessor() {
 	}
 }
 
+// processNewSlot processes new slots that have been added to the beacon chain
 func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	_apiHeadSlot := api.headSlot.Load()
 	if headSlot <= _apiHeadSlot {
@@ -414,6 +422,7 @@ func (api *RelayAPI) processNewSlot(headSlot uint64) {
 	}).Infof("updated headSlot to %d", headSlot)
 }
 
+// updateProposerDuties updates the proposer duties stored in the RelayAPI
 func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	// Ensure only one updating is running at a time
 	if api.isUpdatingProposerDuties.Swap(true) {
@@ -452,6 +461,7 @@ func (api *RelayAPI) updateProposerDuties(headSlot uint64) {
 	}
 }
 
+// startKnownValidatorUpdates updates the known validators stored in the datastore
 func (api *RelayAPI) startKnownValidatorUpdates() {
 	for {
 		// Refresh known validators
@@ -467,9 +477,11 @@ func (api *RelayAPI) startKnownValidatorUpdates() {
 	}
 }
 
+// RespondError handles an error response for an HTTP request
 func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
+	// creates a JSON encoding of an HTTPErrorResp struct with the provided code and message
 	resp := HTTPErrorResp{code, message}
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		api.log.WithField("response", resp).WithError(err).Error("Couldn't write error response")
@@ -477,6 +489,7 @@ func (api *RelayAPI) RespondError(w http.ResponseWriter, code int, message strin
 	}
 }
 
+// RespondOK handles a successful response for an HTTP request
 func (api *RelayAPI) RespondOK(w http.ResponseWriter, response any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
@@ -486,6 +499,7 @@ func (api *RelayAPI) RespondOK(w http.ResponseWriter, response any) {
 	}
 }
 
+// handles the status of the request
 func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
@@ -494,11 +508,13 @@ func (api *RelayAPI) handleStatus(w http.ResponseWriter, req *http.Request) {
 //  PROPOSER APIS
 // ---------------
 
+// handles the root endpoint of the API
 func (api *RelayAPI) handleRoot(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, "MEV-Boost Relay API")
 }
 
+// handles a request to register a validator with the RelayAPI
 func (api *RelayAPI) handleRegisterValidator(w http.ResponseWriter, req *http.Request) {
 	ua := req.UserAgent()
 	log := api.log.WithFields(logrus.Fields{
