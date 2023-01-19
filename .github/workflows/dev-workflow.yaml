@@ -31,7 +31,7 @@ jobs:
         DEPLOY_TAG: v1
         DOCKER_FILE: Dockerfile
       run: |
-        docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG -f Dockerfiles/$DOCKER_FILE .
+        DOCKER_BUILDKIT=1 docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG -f $DOCKER_FILE .
         docker tag $REGISTRY/$REPOSITORY:$IMAGE_TAG $REGISTRY/$REPOSITORY:$DEPLOY_TAG
         docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG 
         docker push $REGISTRY/$REPOSITORY:$DEPLOY_TAG
